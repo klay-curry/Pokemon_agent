@@ -15,8 +15,14 @@ v19 是目前效果最好的版本，也是第一个真正意义上的 baseline�
 - 训练与评测管线已跑通，评测成绩稳定优于之前的尝试。
 - 初步结论：在这个任务上，"数据量大、力出奇迹"比复杂的技巧性改进更有效。
 
+## 代码快照（2026-11-24）
+
+- 上传了当前版本（v22 系列）的训练 / 评测代码与配置：native 自对弈 PPO 训练栈（C 环境 + CUDA 模型）、ptcg Python 运行时、tools / decklab / battery、decks 卡组池、docs 设计与实验记录。仅包含代码与配置，不含 checkpoint、日志、对手权重等运行产物。
+- 代码基于 Team Unown Gradiant 的开源 release 改造，原始框架说明见 [docs/UPSTREAM_README.md](docs/UPSTREAM_README.md)，保留其 LICENSE 与引用信息。
+
 ## TODO
 
-- [ ] 上传 v19 训练 / 评测代码与配置
+- [x] 上传训练 / 评测代码与配置（v22 快照）
 - [ ] 补充数据构造说明
+- [ ] 补充 framework 框架图
 - [ ] 比赛结束后整理开源
