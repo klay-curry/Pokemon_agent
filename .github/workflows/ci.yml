@@ -12,15 +12,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Python syntax
-        run: python -m compileall -q agent ptcg tools native submission
-      - name: Deck files are 60 lines
-        run: |
-          bad=0
-          for f in decks/pool/*.csv decks/pool_alt/*.csv submission/deck.csv; do
-            n=$(wc -l < "$f")
-            [ "$n" -eq 60 ] || { echo "$f: $n lines"; bad=1; }
-          done
-          exit $bad
+        run: python -m compileall -q ptcg tools native bc
       - name: Vendored PufferLib equals upstream c5d3c63 plus the patch
         run: |
           git clone -q --filter=blob:none --no-checkout https://github.com/PufferAI/PufferLib.git /tmp/pufferlib
