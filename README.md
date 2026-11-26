@@ -28,42 +28,42 @@
 - **双层评测**：训练内每个 checkpoint 跑连续 bench（`ptcg/rl/eval_watch.py`）+ 训练外 arena 多进程贪心对局矩阵（`ptcg/rl/arena.py`）。
 - **BC 预训练管线**：官方对局 episode → 决策样本（`bc/extract.py`）→ masked NLL（`bc/train_bc.py`）→ 质量门（`bc/quality_gate.py`）。
 
-## Framework 总览
+## Framework
 
-```mermaid
-flowchart TB
-    ENG["官方物料（Kaggle 自行下载，不入库）<br/>引擎 SDK + 官方卡表"]
-    CONF["自产配置（入库）<br/>carddb · embed_pca.npz · lingering_effects.json"]
-    TAB["native/ptcg_tables*.bin 静态表（run 级工件）"]
-    BC["bc/ BC 预训练（可选初始化权重）"]
-    POOL["卡组池（1500+ 副，内容不入库）<br/>热增池 · 采样权重热更新"]
-    TR["native/train_native.py —— 自对弈 PPO<br/>C 环境 + CUDA 策略网络 · 无 PyTorch 训练循环<br/>league/anchor 对手 · HL-Gauss value 头 · aux 辅助头"]
-    EW["双层评测<br/>eval_watch 连续 bench · arena 对局矩阵"]
-    SUB["平台提交（打包模板不入库）"]
+端到端一条线：**官方物料 + 自产配置 → 静态表 → BC 初始化 → 卡组池自对弈 PPO → 双层评测 → 提交**。
 
-    ENG --> CONF --> TAB --> TR
-    BC --> TR
-    POOL --> TR
-    TR --> EW --> SUB
-```
+| 阶段 | 做什么 | 代码 / 产物 |
+|---|---|---|
+| 物料 | Kaggle 引擎 SDK + 官方卡表（许可证限制，不入库） | [data/README.md](data/README.md) |
+| 配置 | 卡表聚合、卡面文本 embedding → PCA、残留效果表 | `tools/build_carddb.py` · `tools/build_embed_pca.py` · `data/embed_pca.npz` |
+| 静态表 | `PTCGTAB1`：卡 / 招式 / 文本 / 卡组表，`--pool` 决定 deck id 空间 | `native/tools/export_tables.py` |
+| BC 预训练 | 官方 episode → 决策样本 → masked NLL → `bc_init.bin` | `bc/` |
+| 自对弈 PPO | C 环境 + CUDA 网络，league / anchor 对手，卡组池热更新 | `native/train_native.py` |
+| 评测 | 训练内连续 bench + 训练外 arena 对局矩阵 | `ptcg/rl/eval_watch.py` · `ptcg/rl/arena.py` |
+| 提交 | `main.py` + `deck.csv` + 权重，CPU 推理 | 打包模板不入库 |
 
-上游原版框架说明（英文，含逐文件布局表）：[docs/UPSTREAM_README.md](docs/UPSTREAM_README.md)。
-
-## 三张图
-
+下面三张图把最需要展开的三块摊开：**编码**（输入长什么样）、**模型**（网络怎么搭）、**卡组池**（怎么采样、怎么训练、怎么评测）。
 1600×1000 @200 dpi，PNG + SVG 在 [`docs/figures/out/`](docs/figures/out/)；生成脚本、逐项事实出处、待确认点见 [`docs/figures/README.md`](docs/figures/README.md)。
 
-**① 编码：一条数值通道，一条文本通道** —— 观测行 12,992 个 fp32 全是 id 与数值（C 编码器每步现算）；卡面文字离线走 text embedding → PCA，冻结成 1448 行卡表。两条通道唯一的接触点是 `card_id`，在 `token_proj` 汇合成 324 → 128。
+### ① 编码：一条数值通道，一条文本通道
+
+观测行 12,992 个 fp32 全是 id 与数值（C 编码器每步现算，`ptcg/rl/buffers.py` 的 `VERSION 6` 是硬契约）；卡面文字走另一条完全离线的通道：`text-embedding-3-large` 3072 维 → PCA 白化 → 卡 128 / 招式 64 / 特性 64，冻结成 1448 行卡表。两条通道唯一的接触点是 `card_id`，在 `token_proj` 汇合成 324 → 128 —— 文本永远不会污染数值特征，数值也不用等文本。
 
 ![编码：数值通道 + 文本通道](docs/figures/out/fig1_feature.png)
 
-**② 模型：一条共享主干 + 一个演员 + 两个评论家** —— d128 / 8 头 / FFN 512 / 4 层，2.31 M 参数；value 头是 51-bin HL-Gauss，oracle 评论家只在训练时当 baseline；MoE 5 专家头是已关闭的可选分支。
+### ② 模型：一条共享主干 + 一个演员 + 两个评论家
+
+d128 / 8 头 / FFN 512 / 4 层，2,306,568 参数；演员在 64 个等价类上打分，盲评论家发布用、oracle 评论家只在训练时当 PPO 的 baseline；v22 的 value 头换成 51-bin HL-Gauss（+13,107 参数）。MoE 5 专家头是验证过无族内增益、主力 run 关闭的可选分支。训练循环里没有 PyTorch：前向与反向全是手写 CUDA。
 
 ![模型：共享主干 + 演员 + 双评论家](docs/figures/out/fig2_model.png)
 
-**③ 卡组池：一个池，两个座位，一套权重** —— 中间是 `decks/pool`（deck id = 排序位置、采样权重、coverage 池、append-only 热增）；左侧学习方、右侧对手方按权重各抽一副；一局之后 reward 进 PPO、deck 级胜负进评测，最后回流成新权重与采样权重。
+### ③ 卡组池：一个池，两个座位，一套权重
+
+中间是 `decks/pool`（每副 60 行、deck id = 排序位置、采样权重、coverage 池 id ≥ 4096、append-only 热增）；左侧学习方、右侧对手方按权重各抽一副；一局之后 reward 进 PPO、deck 级胜负进评测（anchor 逐副胜率 / deck 矩阵 / bench / arena），最后回流成新权重与采样权重。
 
 ![卡组池：一个池，两个座位，一套权重](docs/figures/out/fig3_pipeline.png)
+
+上游原版框架说明（英文，含逐文件布局表）：[docs/UPSTREAM_README.md](docs/UPSTREAM_README.md)。
 
 ## 目录结构
 
@@ -79,7 +79,7 @@ flowchart TB
 | `bc/` | BC 预训练：样本抽取 / masked NLL 训练 / 质量门 |
 | `tools/` | 数据与 embedding 构建（`build_carddb.py`、`embed_card_texts.py`、`build_embed_pca.py`）、观测契约校验（`validate_obs_v4.py`）、评测 runner（`selfeval*.py`、`make_opponents.sh`） |
 | `data/` | 自带运行时配置（`embed_pca.npz`、`lingering_effects.json`）；官方引擎/卡表自行下载，不入库（见 [data/README.md](data/README.md)） |
-| `docs/` | 分域文档 + v21/v22 设计与复盘记录（见下方索引） |
+| `docs/` | 分域文档 + v21/v22 设计与复盘记录（见下方索引）；`docs/figures/` 是三张框架图与生成脚本 |
 | `setup/` | `bootstrap.sh` + `requirements.txt` |
 
 **未包含（比赛物料，训练机本地）**：官方引擎与卡表（Kaggle 自取）、卡组池内容与 decklab 工具、固定评测电池配置、Kaggle 格式对手权重、提交包模板、checkpoint 与日志。
@@ -110,6 +110,7 @@ PYTHONPATH=data:.:native python3 -u native/train_native.py \
 | `docs/model.md` | 观测与网络 |
 | `docs/engine.md` | 官方模拟器 |
 | `docs/eval.md` | 评测 |
+| `docs/figures/README.md` | 三张框架图（编码 / 模型 / 卡组池）的生成脚本、逐项事实出处与待确认点 |
 | `docs/design_moe5_v1_20261121.md` `docs/moe5_7h_report_20261122.md` | MoE 专家头设计与 7 小时实验报告（结论：无族内增益，不进主力） |
 | `docs/plan_v21_optimizer_20261119.md` `docs/v21_split_review_20261119.md` `docs/lesson_c2_sparse_advantage_batch_20261121.md` | v21/v22 迭代的设计、评审与教训复盘 |
 
