@@ -1,4 +1,4 @@
-# Pokemon_agent
+﻿# Pokemon_agent
 
 宝可梦（Pokémon）对战智能体比赛（Kaggle *PTCG AI Battle*）参赛仓库。**比赛进行中，仓库保持私有。**
 
@@ -138,6 +138,6 @@ v19 是第一个真正意义上的 baseline：
 ## TODO
 
 - [x] 上传训练 / 评测代码与配置（v22 快照，简历导向精简版）
-- [x] Framework 总览与目录结构说明（mermaid 简版）
+- [x] Framework 总览与目录结构说明（流水线表格 + 三张展开图）
 - [x] 正式 framework 框架图（[docs/figures](docs/figures/)：编码 / 模型 / 卡组池三张，含生成脚本）
 - [ ] 比赛结束后整理开源
