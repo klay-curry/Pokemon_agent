@@ -49,6 +49,22 @@ flowchart TB
 
 上游原版框架说明（英文，含逐文件布局表）：[docs/UPSTREAM_README.md](docs/UPSTREAM_README.md)。
 
+## 三张图
+
+1600×1000 @200 dpi，PNG + SVG 在 [`docs/figures/out/`](docs/figures/out/)；生成脚本、逐项事实出处、待确认点见 [`docs/figures/README.md`](docs/figures/README.md)。
+
+**① 编码：一条数值通道，一条文本通道** —— 观测行 12,992 个 fp32 全是 id 与数值（C 编码器每步现算）；卡面文字离线走 text embedding → PCA，冻结成 1448 行卡表。两条通道唯一的接触点是 `card_id`，在 `token_proj` 汇合成 324 → 128。
+
+![编码：数值通道 + 文本通道](docs/figures/out/fig1_feature.png)
+
+**② 模型：一条共享主干 + 一个演员 + 两个评论家** —— d128 / 8 头 / FFN 512 / 4 层，2.31 M 参数；value 头是 51-bin HL-Gauss，oracle 评论家只在训练时当 baseline；MoE 5 专家头是已关闭的可选分支。
+
+![模型：共享主干 + 演员 + 双评论家](docs/figures/out/fig2_model.png)
+
+**③ 卡组池：一个池，两个座位，一套权重** —— 中间是 `decks/pool`（deck id = 排序位置、采样权重、coverage 池、append-only 热增）；左侧学习方、右侧对手方按权重各抽一副；一局之后 reward 进 PPO、deck 级胜负进评测，最后回流成新权重与采样权重。
+
+![卡组池：一个池，两个座位，一套权重](docs/figures/out/fig3_pipeline.png)
+
 ## 目录结构
 
 | 目录 | 内容 |
@@ -122,5 +138,5 @@ v19 是第一个真正意义上的 baseline：
 
 - [x] 上传训练 / 评测代码与配置（v22 快照，简历导向精简版）
 - [x] Framework 总览与目录结构说明（mermaid 简版）
-- [ ] 正式 framework 框架图（待手绘草图后绘制）
+- [x] 正式 framework 框架图（[docs/figures](docs/figures/)：编码 / 模型 / 卡组池三张，含生成脚本）
 - [ ] 比赛结束后整理开源
