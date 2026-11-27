@@ -13,7 +13,7 @@
 
 **模型（选取与建立）**
 
-- **策略网络**：token-transformer 策略，观测布局 v4 由 `ptcg/rl/buffers.py` 冻结（改动会同时作废 checkpoint、C 编码器与静态表）；前向 + 反向全部用 CUDA 手写（`native/model/`），训练循环内没有 PyTorch。
+- **策略网络**：token-transformer 策略，观测布局 v4 由 `ptcg/rl/buffers.py` 冻结（改动会同时作废 checkpoint、C 编码器与静态表）；前向 + 反向全部用 CUDA （`native/model/`），训练循环内没有 PyTorch。
 - **value 头**：从标量 value 迁移到 **HL-Gauss 51-bin 直方图回归头**（`native/tools/make_hl_init.py` 负责旧权重的零成本布局迁移）。
 - **辅助头**：手牌 / 奖品牌预测辅助损失（`PTCG_AUX_HAND` / `PTCG_AUX_PRIZE`），帮助隐信息状态学习。
 - **隐信息建模**：`ptcg/tracker.py`（对手手牌 / 奖品分布追踪）+ `ptcg/effects.py` + `data/lingering_effects.json`（从卡牌文本提炼的残留效果记录）。
